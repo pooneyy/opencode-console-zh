@@ -10,7 +10,7 @@
 // @match        https://opencode.ai/console*
 // @match        https://www.opencode.ai/console*
 // @icon         https://opencode.ai/console/favicon.svg
-// @require      https://fastly.jsdelivr.net/gh/pooneyy/opencode-console-zh@main/local.js
+// @require      https://fastly.jsdelivr.net/gh/pooneyy/opencode-console-zh@45155dd3b1be5eb227984d41c36ff08445255e67/local.js?v=1.0.0&d=2026.10.26
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_registerMenuCommand
