@@ -28,6 +28,18 @@
   var DICT_RAW = (typeof window !== "undefined" && window.OPENCODE_ZH_DICT) || {};
   var RULES = (typeof window !== "undefined" && window.OPENCODE_ZH_RULES) || [];
 
+  function makeRuleCaseInsensitive(re) {
+    if (!re || re.flags.indexOf("i") !== -1) return re;
+    try {
+      return new RegExp(re.source, re.flags + "i");
+    } catch (e) {
+      return re;
+    }
+  }
+  var RULES_CI = RULES.map(function (rule) {
+    return [makeRuleCaseInsensitive(rule[0]), rule[1]];
+  });
+
   /* ==================== 翻译引擎 ==================== */
 
   var SKIP_TAGS = {
@@ -104,8 +116,8 @@
       var base = trCore(sep[1]);
       if (base !== null && base !== sep[1]) return { text: base + sep[2], normalized: false };
     }
-    for (var i = 0; i < RULES.length; i++) {
-      var re = RULES[i][0], rep = RULES[i][1];
+    for (var i = 0; i < RULES_CI.length; i++) {
+      var re = RULES_CI[i][0], rep = RULES_CI[i][1];
       re.lastIndex = 0;
       if (re.test(text)) {
         var rr = applyRuleWithResidual(text, re, rep);
@@ -260,11 +272,25 @@
     return m[1] + t + m[3];
   }
 
+  var labelledbyRefs = {};
+  function refreshLabelledbyRefs() {
+    labelledbyRefs = {};
+    var els = document.querySelectorAll("[aria-labelledby]");
+    for (var i = 0; i < els.length; i++) {
+      var ids = (els[i].getAttribute("aria-labelledby") || "").trim().split(/\s+/);
+      for (var j = 0; j < ids.length; j++) if (ids[j]) labelledbyRefs[ids[j]] = 1;
+    }
+  }
+
   function shouldSkipEl(el) {
     if (!el || el.nodeType !== 1) return true;
     if (SKIP_TAGS[(el.tagName || "").toUpperCase()]) return true;
     if (el.isContentEditable) return true;
     if (el.getAttribute && el.getAttribute("translate") === "no") return true;
+    if (el.getAttribute && el.getAttribute("aria-hidden") === "true") {
+      var eid = el.id;
+      if (!eid || !labelledbyRefs[eid]) return true;
+    }
     if (el.closest && el.closest("[translate=no],[data-oc-zh-skip]")) return true;
     return false;
   }
@@ -482,10 +508,17 @@
     }
     out.push(chars.slice(prev).join(""));
 
+    var firstIdx = origIdx[0], lastIdx = origIdx[origIdx.length - 1];
+    var isCjk = /[\u3400-\u9fff]/.test(translated);
     for (var j = 0; j < sub.length; j++) {
       var m = /^([\s\u00a0]*)([\s\S]*?)([\s\u00a0]*)$/.exec(sub[j].nodeValue);
       var seg = (out[j] || "").replace(/^[\s\u00a0]+/, "").replace(/[\s\u00a0]+$/, "");
-      res[origIdx[j]] = m[1] + seg + m[3];
+      var lead = m[1], tail = m[3];
+      if (isCjk) {
+        if (origIdx[j] !== firstIdx) lead = "";
+        if (origIdx[j] !== lastIdx) tail = "";
+      }
+      res[origIdx[j]] = lead + seg + tail;
     }
     return res;
   }
@@ -583,7 +616,9 @@
     var kids = el.childNodes;
     for (var i = 0; i < kids.length; i++) {
       var t = kids[i].nodeType;
-      if (t !== 3 && t !== 8) return false;
+      if (t === 3 || t === 8) continue;
+      if (t === 1 && inlineSlotEligible(kids[i])) continue;
+      return false;
     }
     return true;
   }
@@ -613,11 +648,14 @@
         slots.push({ kind: "text", node: child, texts: [child] });
       } else if (t === 8) {
       } else if (t === 1) {
-        if (!inlineSlotEligible(child)) return null;
-        var texts = [];
-        collectDescendantTexts(child, texts);
-        slots.push({ kind: "el", el: child, texts: texts });
-        hasElSlot = true;
+        if (shouldSkipEl(child)) {
+        } else {
+          if (!inlineSlotEligible(child)) return null;
+          var texts = [];
+          collectDescendantTexts(child, texts);
+          slots.push({ kind: "el", el: child, texts: texts });
+          hasElSlot = true;
+        }
       } else {
         return null;
       }
@@ -684,6 +722,11 @@
           ((isWord(chars[fwd - 1]) && isHan(chars[fwd])) || (isHan(chars[fwd - 1]) && isWord(chars[fwd])))) return fwd;
       if (back > pos && back < chars.length && /\s/.test(chars[back - 1]) && /\s/.test(chars[back])) return back;
       if (fwd > pos && fwd < chars.length && /\s/.test(chars[fwd - 1]) && /\s/.test(chars[fwd])) return fwd;
+    }
+    if (ideal > pos && ideal < chars.length) {
+      var cjkB = /[\u3400-\u9fff\uf900-\ufaff]/.test(chars[ideal - 1]);
+      var cjkA = /[\u3400-\u9fff\uf900-\ufaff]/.test(chars[ideal]);
+      if (cjkB && cjkA) return ideal;
     }
     return -1;
   }
@@ -783,6 +826,10 @@
     while ((m = re.exec(joined))) {
       if (m[0].length === 1 && /[A-Za-z]/.test(m[0])) continue; // 单字母噪声
       cands.push({ srcS: m.index, srcE: m.index + m[0].length, text: m[0], hint: false });
+      var tw = trDictOnly(m[0]);
+      if (tw !== null && tw !== m[0]) {
+        cands.push({ srcS: m.index, srcE: m.index + m[0].length, text: tw, hint: true });
+      }
     }
     for (i = 0; i < n; i++) {
       if (forced[i]) continue;
@@ -840,7 +887,7 @@
         if (trTo > trFrom) return false;
         return true;
       }
-      if (trTo <= trFrom) return false;
+      if (trTo <= trFrom) return true;
       var gapTr = tr.slice(trFrom, trTo);
       if (real.length === 1) { segs[real[0]] += gapTr; return true; }
       var weights = real.map(function (ix) {
@@ -1058,6 +1105,7 @@
   /* ==================== 全量扫描 ==================== */
 
   function fullPass() {
+    refreshLabelledbyRefs();
     walk(document.documentElement);
     walkAttrs(document.documentElement);
     if (enabled) {
@@ -1120,6 +1168,7 @@
   var timerId = null;
 
   function flush() {
+    refreshLabelledbyRefs();
     scheduled = false;
     if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
     if (timerId !== null) { clearTimeout(timerId); timerId = null; }
