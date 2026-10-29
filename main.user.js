@@ -2,7 +2,7 @@
 // @name         OpenCode Console 汉化
 // @name:en      OpenCode Console Chinese Localization
 // @namespace    https://github.com/pooneyy/opencode-console-zh
-// @version      1.0.0
+// @version      1.1.0
 // @description    将 opencode.ai/console 界面自动翻译为简体中文，覆盖导航、按钮、表单、提示与报错信息，支持 SPA 动态渲染，可随时一键切换中英文。如有任何问题，请前往 https://github.com/pooneyy/opencode-console-zh 提交 Issue。
 // @description:en Translate the opencode.ai console UI into Simplified Chinese automatically, with SPA support and a one-key toggle. If you have any questions, please go to https://github.com/pooneyy/opencode-console-zh and submit an Issue.
 // @author       pooneyy
@@ -10,7 +10,7 @@
 // @match        https://opencode.ai/console*
 // @match        https://www.opencode.ai/console*
 // @icon         https://opencode.ai/console/favicon.svg
-// @require      https://fastly.jsdelivr.net/gh/pooneyy/opencode-console-zh@45155dd3b1be5eb227984d41c36ff08445255e67/local.js?v=1.0.0&d=2026.10.26
+// @require      https://fastly.jsdelivr.net/gh/pooneyy/opencode-console-zh@4804fea082f2500474da4de9b323e7e6415f06fc/local.js?v=1.1.0&d=2026.10.29
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_registerMenuCommand
