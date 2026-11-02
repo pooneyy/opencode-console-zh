@@ -1426,6 +1426,7 @@ var OPENCODE_ZH_DICT = {
   "Loading workspace...": "正在加载工作区...",
   "Loading...": "加载中...",
   "Loading…": "加载中…",
+  "Loading saved SAML setup...": "正在加载已保存的 SAML 设置...",
   "Location": "位置",
   "Log in": "登录",
   "Log in to OpenCode Console": "登录 OpenCode 控制台",
