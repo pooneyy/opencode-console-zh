@@ -836,7 +836,7 @@
     var forced = parts.map(function (p) { return p.replace(/[\s\u00a0]+/g, "").length === 0; });
 
     var cands = [];
-    var re = /[A-Za-z0-9]+(?:[.'’@:_%$\/\\-][A-Za-z0-9]+)*|[$￥€£₹][0-9][0-9,.]*|[→←↑↓·•●|\/%+#]/g;
+    var re = /[A-Za-z0-9]+(?:[.'’@:_%$\/\\-][A-Za-z0-9]+)*|[$￥€£₹][0-9][0-9,.]*|[→←↑↓·•●|%+#]/g;
     var m;
     while ((m = re.exec(joined))) {
       if (m[0].length === 1 && /[A-Za-z]/.test(m[0])) continue; // 单字母噪声
