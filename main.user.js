@@ -61,8 +61,8 @@
     }
   }
   // 尾部分隔符命中时先剥离分隔符
-  var TRAILING_SEP = /^(.*?)((?:\s*[·•|●|/]\s*)+)$/;
-  var LEADING_SEP = /^([ \u00a0]*[·•|●|/][ \u00a0]+)([\s\S]+)$/;
+  var TRAILING_SEP = /^(.*?)((?:\s*[-·•|●|/—–－‐‑−]\s*)+)$/;
+  var LEADING_SEP = /^([ \u00a0]*[-·•|●|/—–－‐‑−][ \u00a0]+)([\s\S]+)$/;
 
   function normalizeSpace(text) {
     return text.replace(/[\s\u00a0]+/g, " ").trim();
@@ -149,6 +149,11 @@
 
   function translateResidual(segment) {
     if (!/[A-Za-z]/.test(segment)) return segment;
+    var whole = trDictOnly(segment.replace(/^[\s\u00a0]+/, "").replace(/[\s\u00a0]+$/, ""));
+    if (whole !== null) {
+      var mLead = /^([\s\u00a0]*)([\s\S]*)([\s\u00a0]*)$/.exec(segment);
+      if (mLead) return mLead[1] + whole + mLead[3];
+    }
     var words = [];
     segment.replace(RESIDUAL_WORD, function (seg, offset) {
       var before = offset > 0 ? segment.charAt(offset - 1) : "";
@@ -292,6 +297,16 @@
       if (!eid || !labelledbyRefs[eid]) return true;
     }
     if (el.closest && el.closest("[translate=no],[data-oc-zh-skip]")) return true;
+    return false;
+  }
+
+  function shouldSkipAttrEl(el) {
+    if (!el || el.nodeType !== 1) return true;
+    if (el.isContentEditable) return true;
+    if (el.getAttribute && el.getAttribute("translate") === "no") return true;
+    if (el.closest && el.closest("[translate=no],[data-oc-zh-skip]")) return true;
+    var t = (el.tagName || "").toUpperCase();
+    if (t === "SCRIPT" || t === "STYLE" || t === "TEMPLATE" || t === "NOSCRIPT") return true;
     return false;
   }
 
@@ -862,6 +877,32 @@
       lastTr = idx + c.text.length;
       lastSrc = c.srcE;
     }
+
+    var hardAnchors = [];
+    for (i = 0; i < n; i++) {
+      if (forced[i]) continue;
+      var ht = parts[i].replace(/^\s+|\s+$/g, "");
+      if (ht.length < 2) continue;
+      var hp = tr.indexOf(ht);
+      if (hp < 0) continue;
+      if (hp > 0 && /[A-Za-z0-9]/.test(tr.charAt(hp - 1))) continue;
+      if (hp + ht.length < tr.length && /[A-Za-z0-9]/.test(tr.charAt(hp + ht.length))) continue;
+      var hs = bounds[i].s + parts[i].indexOf(ht);
+      hardAnchors.push({ srcS: hs, srcE: hs + ht.length, trS: hp, trE: hp + ht.length });
+    }
+    if (hardAnchors.length) {
+      var kept = [];
+      for (i = 0; i < anchors.length; i++) {
+        var overlap = false;
+        for (j = 0; j < hardAnchors.length; j++) {
+          if (anchors[i].srcE > hardAnchors[j].srcS && anchors[i].srcS < hardAnchors[j].srcE) { overlap = true; break; }
+        }
+        if (!overlap) kept.push(anchors[i]);
+      }
+      anchors = kept.concat(hardAnchors);
+      anchors.sort(function (a, b) { return a.srcS - b.srcS; });
+    }
+
     if (!anchors.length) {
       if (n > 4) return null;
       if (cjkRatio(tr) < 0.3) return null;
@@ -872,7 +913,11 @@
 
     function distributeGap(srcFrom, srcTo, trFrom, trTo) {
       if (srcTo <= srcFrom) {
-        if (trTo > trFrom) return false;
+        if (trTo > trFrom) {
+          var lead = tr.slice(trFrom, trTo);
+          for (var ld = 0; ld < n; ld++) { if (!forced[ld]) { segs[ld] = lead + segs[ld]; return true; } }
+          return false;
+        }
         return true;
       }
       var idxs = [];
@@ -884,7 +929,16 @@
       var real = [];
       for (var q = 0; q < idxs.length; q++) if (!forced[idxs[q]]) real.push(idxs[q]);
       if (!real.length) {
-        if (trTo > trFrom) return false;
+        if (trTo > trFrom) {
+          var gapOnly = tr.slice(trFrom, trTo);
+          var target = -1;
+          for (var gz = 0; gz < n; gz++) { if (!forced[gz] && bounds[gz].e <= srcFrom) target = gz; }
+          if (target < 0) {
+            for (var gz2 = 0; gz2 < n; gz2++) { if (!forced[gz2] && bounds[gz2].s >= srcTo) { target = gz2; break; } }
+          }
+          if (target >= 0) { segs[target] += gapOnly; return true; }
+          return false;
+        }
         return true;
       }
       if (trTo <= trFrom) return true;
@@ -1025,7 +1079,7 @@
   var attrStore = new WeakMap();
 
   function processAttrs(el) {
-    if (!el || el.nodeType !== 1 || shouldSkipEl(el)) return;
+    if (!el || el.nodeType !== 1 || shouldSkipAttrEl(el)) return;
     for (var i = 0; i < ATTRS.length; i++) {
       var name = ATTRS[i];
       if (!el.hasAttribute || !el.hasAttribute(name)) continue;
